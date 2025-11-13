@@ -1,0 +1,166 @@
+# Git Workflow Guardian - Cloud-First Sync Configuration
+# Configuration for Claude Code on the web integration
+
+sync:
+  # Sync mode: polling (simple), webhook (fast), hybrid (recommended)
+  mode: polling  # Start with polling, can upgrade to hybrid later
+
+  # Claude branch detection
+  claude_branches:
+    # Flexible patterns - exact naming convention not specified in official docs
+    # Will match branches created by Claude Code on the web
+    patterns:
+      - '^claude/.*'       # Primary pattern: claude/*
+      - '^ai/.*'           # Alternative pattern
+      - '^assistant/.*'    # Another alternative
+
+    # Auto-sync behavior
+    auto_sync: true
+    sync_latest_only: true  # Only sync most recent Claude branch
+    keep_history: 10        # Keep last 10 Claude branches locally
+
+  # Polling settings (fallback or primary mode)
+  polling:
+    enabled: true
+    interval: 30                    # Check for new branches every 30 seconds
+    active_branch_interval: 10      # Check active branch for updates every 10 seconds
+
+  # Webhook settings (optional, for instant sync)
+  webhook:
+    enabled: false
+    port: 8766
+    secret: ${GITHUB_WEBHOOK_SECRET}  # Set via environment variable
+    endpoint: /webhook/github
+
+    # Events to listen for
+    events:
+      - create  # Branch created
+      - push    # Commits pushed to branch
+
+    # Tunnel for local webhook endpoint (optional)
+    tunnel: none  # Options: none, ngrok, tailscale
+
+  # Branch sync behavior
+  branch_sync:
+    auto_checkout: true              # Automatically checkout new Claude branches
+    stash_before_checkout: true      # Stash uncommitted changes before checkout
+    auto_pop_stash: false            # Don't auto-pop stash (might conflict)
+    create_tracking_branch: true     # Create local tracking branch
+
+  # Auto-test settings (follows official Claude Code recommendation)
+  auto_test:
+    enabled: true
+    run_before_dev_server: true
+    skip_dev_on_failure: false       # Still start dev server even if tests fail
+    timeout: 300                     # 5 minutes max for test execution
+
+    # Test commands per project type
+    commands:
+      node: "npm test"
+      next: "npm test"
+      react: "npm test"
+      vue: "npm test"
+      python: "pytest"
+      django: "python manage.py test"
+      flask: "pytest"
+
+    # Notification preferences
+    notifications:
+      on_pass: true
+      on_fail: true
+      show_output: true              # Show test output in notification
+
+  # Dev server management
+  dev_server:
+    auto_restart: true
+    restart_on_branch_change: true   # Restart when switching branches
+    restart_on_branch_update: true   # Restart when branch gets new commits
+    open_browser: true               # Open browser after server ready
+    wait_for_ready: true             # Wait for server to respond before notifying
+    ready_timeout: 30                # Max wait time (seconds)
+    auto_restart_on_crash: true      # Auto-restart if server crashes
+    health_check_interval: 30        # Check server health every 30 seconds
+
+    # Dev server commands per project type
+    commands:
+      node: "npm run dev"
+      next: "npm run dev"
+      react: "npm start"
+      vue: "npm run serve"
+      python: "python manage.py runserver"
+      django: "python manage.py runserver"
+      flask: "flask run"
+
+    # Expected ports per project type
+    ports:
+      node: 3000
+      next: 3000
+      react: 3000
+      vue: 8080
+      python: 8000
+      django: 8000
+      flask: 5000
+
+  # CLI mode detection (detect "Open in CLI" usage)
+  cli_mode_detection:
+    enabled: true
+    pause_sync_when_active: true     # Pause sync when user working in CLI
+    uncommitted_changes_threshold: 300  # Consider CLI active if changes < 5 min old
+
+  # Notification settings
+  notifications:
+    # Sequential queue settings (one notification at a time)
+    sequential: true                 # Show one notification at a time
+    auto_dismiss_timeout: 60         # Auto-dismiss after 60 seconds if not interacted
+
+    # What to notify about
+    on_new_branch: true
+    on_branch_update: true
+    on_sync_complete: true
+    on_sync_error: true
+    on_test_result: true
+    on_dev_server_ready: true
+    on_dev_server_failed: true
+    on_cli_mode_detected: true
+
+    # Notification content
+    show_branch_name: true
+    show_commit_count: true
+    show_test_summary: true
+    show_diff_stats: true
+    include_pr_link: true            # Include link to create PR on GitHub
+
+    # Notification history
+    store_history: true
+    history_limit: 100               # Keep last 100 notifications
+
+    # System tray
+    system_tray:
+      enabled: true
+      show_unread_count: true
+
+  # Repository monitoring
+  # Add your repositories here
+  repositories:
+    # Example configuration - uncomment and modify for your repos
+
+    # - path: ~/Projects/my-app
+    #   main_branch: main
+    #   auto_sync_claude_branches: true
+    #   dev_server_type: next          # Override auto-detection
+    #   dev_server_port: 3000          # Override default port
+    #   auto_test: true                # Override global setting
+
+    # - path: ~/Projects/my-api
+    #   main_branch: develop
+    #   auto_sync_claude_branches: true
+    #   dev_server_type: flask
+    #   dev_server_port: 5000
+
+  # Logging
+  logging:
+    level: INFO                       # DEBUG, INFO, WARNING, ERROR
+    file: ~/.git-workflow-guardian/sync.log
+    max_size_mb: 10
+    backup_count: 3
+    console: true                     # Also log to console
