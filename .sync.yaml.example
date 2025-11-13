@@ -15,6 +15,11 @@ test_timeout: 300
 # Start dev server after tests pass
 start_dev_server: true
 
+# Auto-start dev server (for GitHub Codespaces)
+# If true, will automatically start the dev server in the background
+# If false, will only show the command to run
+auto_start_server: false  # Set to true in Codespaces
+
 # Custom test commands (optional - auto-detected if not specified)
 test_commands:
   node: "npm test"

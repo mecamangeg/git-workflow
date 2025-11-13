@@ -1,0 +1,54 @@
+{
+  "name": "Claude Code Workflow - Auto-Sync",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+
+  // Install dependencies on container creation
+  "postCreateCommand": "pip install pyyaml",
+
+  // Auto-start sync watcher in tmux session
+  "postStartCommand": "bash .devcontainer/start-sync.sh",
+
+  // Forward common dev server ports
+  "forwardPorts": [3000, 5000, 8000, 8080],
+
+  // Port attributes - auto-open preview for port 3000
+  "portsAttributes": {
+    "3000": {
+      "label": "Dev Server",
+      "onAutoForward": "notify"
+    },
+    "5000": {
+      "label": "Flask",
+      "onAutoForward": "notify"
+    },
+    "8000": {
+      "label": "Django/FastAPI",
+      "onAutoForward": "notify"
+    },
+    "8080": {
+      "label": "Vue",
+      "onAutoForward": "notify"
+    }
+  },
+
+  // VS Code customizations
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "ms-python.python",
+        "dbaeumer.vscode-eslint"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // Features to install
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/python:1": {},
+    "ghcr.io/devcontainers/features/git:1": {}
+  }
+}

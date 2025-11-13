@@ -15,6 +15,8 @@ Usage:
 import argparse
 import asyncio
 import json
+import os
+import signal
 import subprocess
 import sys
 import time
@@ -62,6 +64,8 @@ class MiniSync:
         self.project_dir = project_dir
         self.config = config
         self.claude_patterns = config.get('claude_branch_patterns', ['^claude/.*'])
+        self.dev_server_pid = None
+        self.dev_server_logfile = self.project_dir / '.dev-server.log'
 
     def run_command(self, cmd: List[str], timeout: int = 30) -> tuple[int, str, str]:
         """Run a command and return (exit_code, stdout, stderr)"""
@@ -236,8 +240,71 @@ class MiniSync:
                 print(stderr[:500])  # Show first 500 chars
             return False
 
-    def start_dev_server(self) -> bool:
-        """Start dev server"""
+    def is_codespaces(self) -> bool:
+        """Check if running in GitHub Codespaces"""
+        return os.getenv('CODESPACES') == 'true' or os.getenv('CODESPACE_NAME') is not None
+
+    def get_codespace_preview_url(self, port: int = 3000) -> Optional[str]:
+        """Get Codespaces preview URL"""
+        codespace_name = os.getenv('CODESPACE_NAME')
+        if codespace_name:
+            return f"https://{codespace_name}-{port}.app.github.dev"
+        return None
+
+    def get_dev_server_port(self, project_type: str) -> int:
+        """Get default port for project type"""
+        ports = {
+            'node': 3000,
+            'next': 3000,
+            'react': 3000,
+            'vue': 8080,
+            'python': 8000,
+            'django': 8000,
+            'flask': 5000
+        }
+        return ports.get(project_type, 3000)
+
+    def is_dev_server_running(self) -> bool:
+        """Check if dev server is already running"""
+        if not self.dev_server_pid:
+            return False
+
+        try:
+            # Check if process exists
+            os.kill(self.dev_server_pid, 0)
+            return True
+        except OSError:
+            return False
+
+    def stop_dev_server(self):
+        """Stop running dev server"""
+        if self.dev_server_pid:
+            try:
+                log_info(f"Stopping dev server (PID: {self.dev_server_pid})...")
+                os.kill(self.dev_server_pid, signal.SIGTERM)
+                time.sleep(2)
+
+                # Force kill if still running
+                try:
+                    os.kill(self.dev_server_pid, signal.SIGKILL)
+                except OSError:
+                    pass  # Already dead
+
+                log_success("Dev server stopped")
+            except Exception as e:
+                log_warning(f"Error stopping dev server: {e}")
+            finally:
+                self.dev_server_pid = None
+
+    def start_dev_server(self, auto_start: bool = None) -> bool:
+        """Start dev server
+
+        Args:
+            auto_start: If True, automatically start server. If None, use config.
+        """
+        if auto_start is None:
+            auto_start = self.config.get('auto_start_server', False)
+
         if not self.config.get('start_dev_server', True):
             log_info("Dev server disabled in config, skipping...")
             return True
@@ -262,12 +329,64 @@ class MiniSync:
             log_info(f"No dev command for {project_type}, skipping dev server")
             return True
 
-        log_header("Starting dev server...")
-        log_success(f"Run this command in a new terminal:")
-        print(f"{Colors.CYAN}{dev_cmd}{Colors.ENDC}")
-        print(f"\nOr press Ctrl+C and run it manually")
+        port = self.get_dev_server_port(project_type)
 
-        return True
+        log_header("Dev Server")
+
+        # Check if already running
+        if self.is_dev_server_running():
+            log_info("Dev server already running, restarting...")
+            self.stop_dev_server()
+
+        if auto_start or self.is_codespaces():
+            # Auto-start mode (for Codespaces or when enabled)
+            log_info(f"Starting dev server: {dev_cmd}")
+
+            try:
+                # Start dev server in background
+                with open(self.dev_server_logfile, 'w') as logfile:
+                    process = subprocess.Popen(
+                        dev_cmd,
+                        shell=True,
+                        cwd=self.project_dir,
+                        stdout=logfile,
+                        stderr=subprocess.STDOUT,
+                        preexec_fn=os.setpgrp if sys.platform != 'win32' else None
+                    )
+
+                self.dev_server_pid = process.pid
+                log_success(f"Dev server started (PID: {self.dev_server_pid})")
+                log_info(f"Logs: {self.dev_server_logfile}")
+
+                # Wait a moment for startup
+                time.sleep(2)
+
+                # Show preview URL if in Codespaces
+                if self.is_codespaces():
+                    preview_url = self.get_codespace_preview_url(port)
+                    if preview_url:
+                        print(f"\n{Colors.BOLD}{Colors.GREEN}🚀 Preview URL:{Colors.ENDC}")
+                        print(f"{Colors.CYAN}{preview_url}{Colors.ENDC}")
+                        print(f"\n{Colors.YELLOW}⚡ Tip: Save this URL as a bookmark! Just refresh when new branches sync.{Colors.ENDC}\n")
+                else:
+                    log_success(f"Dev server running on http://localhost:{port}")
+
+                return True
+
+            except Exception as e:
+                log_error(f"Failed to start dev server: {e}")
+                return False
+        else:
+            # Manual mode - just show command
+            log_success(f"Run this command in a new terminal:")
+            print(f"{Colors.CYAN}{dev_cmd}{Colors.ENDC}")
+
+            if self.is_codespaces():
+                preview_url = self.get_codespace_preview_url(port)
+                if preview_url:
+                    print(f"\n{Colors.BLUE}Preview URL:{Colors.ENDC} {preview_url}\n")
+
+            return True
 
 
 def load_config(project_dir: Path) -> dict:
@@ -287,6 +406,7 @@ def load_config(project_dir: Path) -> dict:
         'claude_branch_patterns': ['^claude/.*'],
         'run_tests': True,
         'start_dev_server': True,
+        'auto_start_server': False,  # Set to True for 100% automation in Codespaces
         'test_timeout': 300
     }
 
