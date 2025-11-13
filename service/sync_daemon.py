@@ -185,6 +185,11 @@ class SyncDaemon:
             logger.warning(f"Not a git repository: {repo_path}")
             return
 
+        # Check for active teleport/CLI session before syncing
+        if await self._is_cli_or_teleport_active(repo_path):
+            logger.info(f"Skipping {repo_path.name} - CLI/teleport session detected")
+            return
+
         logger.debug(f"Checking repository: {repo_path}")
 
         try:
@@ -301,6 +306,73 @@ class SyncDaemon:
             )
 
             await self.notification_queue.add_notification(**notif_data)
+
+    async def _is_cli_or_teleport_active(self, repo_path: Path) -> bool:
+        """
+        Check if user is working in CLI or teleport session.
+
+        Detects:
+        - Active teleport session (session ID in branch name + recent activity)
+        - Uncommitted changes (user editing locally)
+        - Git lock file (git command running)
+
+        Returns:
+            True if CLI/teleport active, False if safe to sync
+        """
+        import subprocess
+        import time
+
+        try:
+            # Check for git lock file (git command in progress)
+            if (repo_path / '.git/index.lock').exists():
+                logger.debug(f"Git lock file found in {repo_path.name}")
+                return True
+
+            # Check for uncommitted changes
+            result = subprocess.run(
+                ['git', 'status', '--porcelain'],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if result.stdout.strip():
+                # Has uncommitted changes
+                # Check if changes are recent (within 5 minutes)
+                index_file = repo_path / '.git/index'
+                if index_file.exists():
+                    mtime = index_file.stat().st_mtime
+                    age = time.time() - mtime
+                    if age < 300:  # 5 minutes
+                        logger.debug(f"Recent uncommitted changes in {repo_path.name} ({age:.0f}s old)")
+                        return True
+
+            # Check for session ID in current branch name (teleport indicator)
+            result = subprocess.run(
+                ['git', 'branch', '--show-current'],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            current_branch = result.stdout.strip()
+            if current_branch and 'session_' in current_branch:
+                # Branch contains session ID - likely teleport session
+                logger.info(f"Teleport session detected in {repo_path.name} (branch: {current_branch})")
+                return True
+
+            return False
+
+        except subprocess.TimeoutError:
+            logger.warning(f"Git command timeout checking {repo_path.name}")
+            # Assume active to be safe
+            return True
+        except Exception as e:
+            logger.error(f"Error checking CLI/teleport status: {e}")
+            # Assume active to be safe
+            return True
 
     def get_status(self) -> dict:
         """Get daemon status"""
