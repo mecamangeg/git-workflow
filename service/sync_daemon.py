@@ -19,6 +19,7 @@ from .claude_branch_detector import ClaudeBranchDetector
 from .branch_sync_manager import BranchSyncManager
 from .notification_queue import NotificationQueue, NotificationBuilder
 from .notification_storage import NotificationStorage
+from .dev_server_manager import DevServerManager
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ class SyncDaemon:
         self.notification_queue = NotificationQueue(self.storage)
         self.branch_detector = ClaudeBranchDetector(self.config)
         self.branch_sync_manager = BranchSyncManager(self.config)
+        self.dev_server_manager = DevServerManager(self.config)
 
         # Repository managers (one per repository)
         self.repo_managers: Dict[str, BranchSyncManager] = {}
@@ -100,6 +102,12 @@ class SyncDaemon:
         # TODO: Start webhook receiver if mode is 'webhook' or 'hybrid'
         # This will be implemented in Phase 5
 
+        # Start dev server monitoring
+        if self.config.get('dev_servers', {}).get('enabled', True):
+            monitoring_task = asyncio.create_task(self.dev_server_manager.monitor_servers())
+            self.tasks.append(monitoring_task)
+            logger.info("Dev server monitoring started")
+
         logger.info("Sync daemon started successfully")
 
         # Keep running until stopped
@@ -115,6 +123,9 @@ class SyncDaemon:
 
         logger.info("Stopping sync daemon")
         self.running = False
+
+        # Stop all dev servers
+        await self.dev_server_manager.stop_all_servers()
 
         # Cancel all tasks
         for task in self.tasks:
@@ -271,17 +282,44 @@ class SyncDaemon:
             if result.success:
                 logger.info(f"Successfully synced: {result.message}")
 
+                # TODO: Run tests if configured (Phase 3)
+                test_passed = True  # Placeholder until Phase 3
+
+                # Start dev server if configured (Phase 4)
+                dev_server_enabled = self.config.get('dev_servers', {}).get('enabled', True)
+                auto_start = self.config.get('dev_servers', {}).get('auto_start', True)
+
+                server_started = False
+                server_url = None
+
+                if dev_server_enabled and auto_start:
+                    logger.info(f"Starting dev server for {repo_path.name}...")
+                    server_started = await self.dev_server_manager.start_server(
+                        repo_path,
+                        branch_name,
+                        force_restart=True
+                    )
+
+                    if server_started:
+                        # Get server info
+                        running_servers = self.dev_server_manager.get_running_servers()
+                        repo_key = str(repo_path)
+                        if repo_key in running_servers:
+                            server_url = running_servers[repo_key]['url']
+                            logger.info(f"Dev server running at {server_url}")
+                    else:
+                        logger.warning("Dev server could not be started")
+
                 # Send notification
                 notif_data = NotificationBuilder.branch_sync_success(
                     branch_name=branch_name,
                     repo_path=str(repo_path),
-                    commit_count=result.commit_count
+                    commit_count=result.commit_count,
+                    test_passed=test_passed,
+                    server_url=server_url if server_started else None
                 )
 
                 await self.notification_queue.add_notification(**notif_data)
-
-                # TODO: Run tests if configured (Phase 3)
-                # TODO: Start dev server if configured (Phase 4)
 
             else:
                 logger.error(f"Sync failed: {result.error}")
@@ -480,7 +518,8 @@ class SyncDaemon:
                 for repo, manager in self.repo_managers.items()
             },
             'queue_size': self.notification_queue.get_queue_size(),
-            'unread_notifications': self.notification_queue.get_unread_count()
+            'unread_notifications': self.notification_queue.get_unread_count(),
+            'dev_servers': self.dev_server_manager.get_running_servers()
         }
 
 

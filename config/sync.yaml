@@ -70,36 +70,33 @@ sync:
       on_fail: true
       show_output: true              # Show test output in notification
 
-  # Dev server management
-  dev_server:
-    auto_restart: true
-    restart_on_branch_change: true   # Restart when switching branches
-    restart_on_branch_update: true   # Restart when branch gets new commits
-    open_browser: true               # Open browser after server ready
-    wait_for_ready: true             # Wait for server to respond before notifying
-    ready_timeout: 30                # Max wait time (seconds)
-    auto_restart_on_crash: true      # Auto-restart if server crashes
-    health_check_interval: 30        # Check server health every 30 seconds
+  # Dev server management (Phase 4)
+  dev_servers:
+    enabled: true                     # Enable dev server management
+    auto_start: true                  # Auto-start dev server after successful sync
+    auto_restart: true                # Auto-restart if server crashes
+    health_check_interval: 30         # Check server health every 30 seconds
+    max_restart_attempts: 3           # Max auto-restart attempts before giving up
+    startup_timeout: 60               # Max wait time for server to start (seconds)
 
-    # Dev server commands per project type
-    commands:
-      node: "npm run dev"
-      next: "npm run dev"
-      react: "npm start"
-      vue: "npm run serve"
-      python: "python manage.py runserver"
-      django: "python manage.py runserver"
-      flask: "flask run"
+    # Custom server configurations (optional, for non-standard setups)
+    # These override auto-detection for specific repositories
+    custom:
+      # Example custom configuration:
+      # my-special-app:
+      #   command: "npm run custom-dev"
+      #   port: 3001
+      #   health_check_url: "http://localhost:3001/health"
+      #   env_vars:
+      #     NODE_ENV: "development"
+      #     DEBUG: "true"
 
-    # Expected ports per project type
-    ports:
-      node: 3000
-      next: 3000
-      react: 3000
-      vue: 8080
-      python: 8000
-      django: 8000
-      flask: 5000
+    # Notification preferences
+    notifications:
+      on_start: true
+      on_stop: true
+      on_restart: true
+      on_health_fail: true
 
   # CLI mode detection (detect "Open in CLI" usage)
   cli_mode_detection:

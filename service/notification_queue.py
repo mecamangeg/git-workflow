@@ -295,7 +295,8 @@ class NotificationBuilder:
         branch_name: str,
         repo_path: str,
         commit_count: int = 0,
-        test_passed: Optional[bool] = None
+        test_passed: Optional[bool] = None,
+        server_url: Optional[str] = None
     ) -> dict:
         """Create branch sync success notification"""
         message_parts = [f"Successfully synced branch '{branch_name}'"]
@@ -307,11 +308,17 @@ class NotificationBuilder:
             test_status = "✅ passed" if test_passed else "❌ failed"
             message_parts.append(f"Tests: {test_status}")
 
+        if server_url:
+            message_parts.append(f"Server: {server_url}")
+
+        # Use server_url if provided, otherwise fallback to default
+        browser_url = server_url if server_url else 'http://localhost:3000'
+
         actions = [
             NotificationAction(
                 label="Open Browser",
                 action="open_browser",
-                data={'url': 'http://localhost:3000'}
+                data={'url': browser_url}
             ),
             NotificationAction(
                 label="Create PR",
