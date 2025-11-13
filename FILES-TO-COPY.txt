@@ -1,0 +1,26 @@
+# Files to Copy to Your Projects
+
+## Essential Files (Required)
+mini_sync.py
+.sync.yaml.example
+sync-control.sh
+
+## Devcontainer Files (For GitHub Codespaces)
+.devcontainer/devcontainer.json
+.devcontainer/start-sync.sh
+
+## Documentation (Reference)
+AI-SETUP-INSTRUCTIONS.md
+CODESPACES-SETUP.md
+MINI-VERSION-README.md
+MINI-VERSION-SUMMARY.md
+CODESPACES-WORKFLOW-BRAINSTORM.md
+
+## Installation Helper
+install-to-project.sh
+DOWNLOAD-AND-INSTALL.md
+
+---
+
+Quick Install Command:
+bash install-to-project.sh /path/to/your/project
