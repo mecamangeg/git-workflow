@@ -2,6 +2,16 @@
 # Git Workflow Guardian - Post-Checkout Hook
 # Reminds to pull main after switching branches
 
+# Detect Python command (python3 or python)
+if command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    # Silently exit if Python not found (post-checkout is non-critical)
+    exit 0
+fi
+
 # Arguments: previous_head new_head branch_checkout_flag
 PREV_HEAD=$1
 NEW_HEAD=$2
@@ -30,7 +40,7 @@ if [ "$CURRENT_BRANCH" = "$MAIN_BRANCH" ]; then
 
     if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
         # Main is out of sync - suggest pull
-        python3 "$(git rev-parse --show-toplevel)/.git/hooks/notifier.py" \
+        $PYTHON_CMD "$(git rev-parse --show-toplevel)/.git/hooks/notifier.py" \
             --violation "pull_before_work" \
             --branch "$MAIN_BRANCH" \
             --repo "$(git rev-parse --show-toplevel)" \

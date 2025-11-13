@@ -60,8 +60,15 @@ monitoring:
   repos:
     auto_discover: true
     search_paths:
+      # Windows examples
       - "D:/Projects"
       - "C:/Users/YourUsername/Projects"
+      # Linux examples
+      # - "/home/yourusername/Projects"
+      # - "~/dev"
+      # macOS examples
+      # - "/Users/yourusername/Development"
+      # - "~/Projects"
     manual_repos: []
 
 # Compliance scoring (Phase 3)
