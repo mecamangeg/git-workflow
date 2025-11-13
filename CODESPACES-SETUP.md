@@ -20,6 +20,11 @@ When you open your project in GitHub Codespaces:
 - ✅ Modify script and restart instantly
 - ✅ Control everything with simple commands
 
+**Smart Features:**
+- 🎯 **Single port per project type** - Next.js always on 3000, Django on 8000, etc.
+- 🧹 **Auto-cleanup** - Kills old servers on same port (no more port conflicts!)
+- 🧠 **Smart detection** - Skips server for libraries/CLI tools (only starts when needed)
+
 ---
 
 ## ⚡ Quick Setup (5 minutes)
@@ -145,6 +150,111 @@ Claude Code web → pushes branch → GitHub
              Show preview URL in terminal logs
                                      ↓
                       You: Click URL → Test!
+```
+
+---
+
+## 🎯 Smart Port Management
+
+### Single Consistent Port Per Project Type
+
+The system ensures **only one server runs per project type** using consistent ports:
+
+| Project Type | Port | Example URL |
+|-------------|------|-------------|
+| Next.js | 3000 | `https://codespace-3000.app.github.dev` |
+| React | 3000 | `https://codespace-3000.app.github.dev` |
+| Vue | 8080 | `https://codespace-8080.app.github.dev` |
+| Django | 8000 | `https://codespace-8000.app.github.dev` |
+| Flask | 5000 | `https://codespace-5000.app.github.dev` |
+
+**What this means:**
+- ✅ **No confusion** - Always the same preview URL for your project type
+- ✅ **No conflicts** - Old servers automatically killed before starting new ones
+- ✅ **Bookmark-friendly** - Save the URL once, use forever (just refresh)
+
+### Example Scenario
+
+**Problem (before):**
+```
+1. You sync branch A → Next.js starts on port 3000
+2. You sync branch B → Next.js starts on port 3001 (conflict!)
+3. Which URL to test? 🤔 Port 3000 or 3001?
+```
+
+**Solution (now):**
+```
+1. You sync branch A → Next.js starts on port 3000
+2. You sync branch B → Old server killed, new one starts on port 3000
+3. Same URL! Just refresh your browser ✅
+```
+
+### Auto-Cleanup in Action
+
+When starting a new dev server:
+```
+ℹ Killing existing process on port 3000 (PID: 1234)...
+✓ Cleared port 3000
+ℹ Starting dev server: npm run dev
+✓ Dev server started (PID: 5678)
+🚀 Preview URL: https://mycodespace-3000.app.github.dev
+```
+
+---
+
+## 🧠 Smart Server Detection
+
+### Only Starts Servers When Needed
+
+The system intelligently detects if your project needs a dev server:
+
+**✅ Projects that GET a server:**
+- Next.js, React, Vue apps (web frameworks)
+- Django, Flask apps (web backends)
+- Node.js projects with `dev` or `start` scripts
+- Python projects with FastAPI/Flask/Django imports
+
+**❌ Projects that DON'T get a server:**
+- Node.js libraries (no dev/start scripts in package.json)
+- Python libraries (setup.py/pyproject.toml without web frameworks)
+- CLI tools
+- Documentation projects
+
+### Example: Node.js Library
+
+```json
+{
+  "name": "my-utility-library",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc"
+  }
+}
+```
+
+**Result:**
+```
+ℹ Project type 'node' doesn't need a dev server (library/CLI tool)
+✓ Sync complete, no server started
+```
+
+### Example: Next.js App
+
+```json
+{
+  "name": "my-nextjs-app",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build"
+  }
+}
+```
+
+**Result:**
+```
+ℹ Starting dev server: npm run dev
+✓ Dev server started (PID: 1234)
+🚀 Preview URL: https://mycodespace-3000.app.github.dev
 ```
 
 ---

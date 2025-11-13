@@ -264,6 +264,111 @@ class MiniSync:
         }
         return ports.get(project_type, 3000)
 
+    def project_needs_dev_server(self, project_type: Optional[str]) -> bool:
+        """Check if project needs a dev server
+
+        Some projects don't need servers:
+        - Node.js libraries (no dev/start script)
+        - Python libraries (no Flask/Django/FastAPI)
+        - CLI tools
+        - Documentation projects
+        """
+        if not project_type:
+            return False
+
+        # Web frameworks always need servers
+        if project_type in ['next', 'react', 'vue', 'django', 'flask']:
+            return True
+
+        # For generic 'node' projects, check if they have dev/start scripts
+        if project_type == 'node':
+            package_json = self.project_dir / 'package.json'
+            if package_json.exists():
+                try:
+                    with open(package_json) as f:
+                        package = json.load(f)
+                        scripts = package.get('scripts', {})
+
+                        # Has dev or start script = needs server
+                        if 'dev' in scripts or 'start' in scripts:
+                            return True
+
+                        # No server scripts = probably a library
+                        return False
+                except:
+                    return False
+
+        # For generic 'python' projects, check for web framework indicators
+        if project_type == 'python':
+            # Check for FastAPI, Flask, Django imports in main files
+            for py_file in ['main.py', 'app.py', 'server.py', 'api.py']:
+                file_path = self.project_dir / py_file
+                if file_path.exists():
+                    try:
+                        content = file_path.read_text()
+                        # Has web framework imports = needs server
+                        if any(fw in content for fw in ['FastAPI', 'Flask', 'django', 'uvicorn', 'gunicorn']):
+                            return True
+                    except:
+                        pass
+
+            # Check pyproject.toml or setup.py for library indicators
+            if (self.project_dir / 'pyproject.toml').exists() or (self.project_dir / 'setup.py').exists():
+                # Has setup files but no web framework = probably a library
+                return False
+
+        # Default: if we're not sure, don't start a server
+        return False
+
+    def kill_process_on_port(self, port: int) -> bool:
+        """Kill any process using the specified port
+
+        This ensures only one server runs on the designated port.
+        """
+        try:
+            # Try lsof first (more reliable on macOS/Linux)
+            result = subprocess.run(
+                ['lsof', '-ti', f':{port}'],
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    try:
+                        pid_int = int(pid.strip())
+                        log_info(f"Killing existing process on port {port} (PID: {pid_int})...")
+                        os.kill(pid_int, signal.SIGTERM)
+                        time.sleep(1)
+
+                        # Force kill if still alive
+                        try:
+                            os.kill(pid_int, signal.SIGKILL)
+                        except OSError:
+                            pass  # Already dead
+                    except (ValueError, OSError) as e:
+                        log_warning(f"Error killing PID {pid}: {e}")
+
+                log_success(f"Cleared port {port}")
+                return True
+        except FileNotFoundError:
+            # lsof not available, try fuser
+            try:
+                result = subprocess.run(
+                    ['fuser', '-k', f'{port}/tcp'],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    log_success(f"Cleared port {port}")
+                    return True
+            except FileNotFoundError:
+                # Neither lsof nor fuser available
+                pass
+
+        return False
+
     def is_dev_server_running(self) -> bool:
         """Check if dev server is already running"""
         if not self.dev_server_pid:
@@ -314,6 +419,11 @@ class MiniSync:
             log_info("No project type detected, skipping dev server")
             return True
 
+        # Check if this project actually needs a dev server
+        if not self.project_needs_dev_server(project_type):
+            log_info(f"Project type '{project_type}' doesn't need a dev server (library/CLI tool)")
+            return True
+
         dev_commands = self.config.get('dev_commands', {
             'node': 'npm run dev',
             'next': 'npm run dev',
@@ -333,10 +443,8 @@ class MiniSync:
 
         log_header("Dev Server")
 
-        # Check if already running
-        if self.is_dev_server_running():
-            log_info("Dev server already running, restarting...")
-            self.stop_dev_server()
+        # Kill any existing process on this port (ensures single port per project type)
+        self.kill_process_on_port(port)
 
         if auto_start or self.is_codespaces():
             # Auto-start mode (for Codespaces or when enabled)
