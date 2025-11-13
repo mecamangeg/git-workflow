@@ -20,6 +20,7 @@ from .branch_sync_manager import BranchSyncManager
 from .notification_queue import NotificationQueue, NotificationBuilder
 from .notification_storage import NotificationStorage
 from .dev_server_manager import DevServerManager
+from .test_runner import TestRunner
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ class SyncDaemon:
         self.notification_queue = NotificationQueue(self.storage)
         self.branch_detector = ClaudeBranchDetector(self.config)
         self.branch_sync_manager = BranchSyncManager(self.config)
+        self.test_runner = TestRunner(self.config)
         self.dev_server_manager = DevServerManager(self.config)
 
         # Repository managers (one per repository)
@@ -282,8 +284,22 @@ class SyncDaemon:
             if result.success:
                 logger.info(f"Successfully synced: {result.message}")
 
-                # TODO: Run tests if configured (Phase 3)
-                test_passed = True  # Placeholder until Phase 3
+                # Run tests if configured (Phase 3)
+                test_result = None
+                test_passed = None
+                run_before_dev = self.config.get('auto_test', {}).get('run_before_dev_server', True)
+
+                if self.test_runner.enabled and run_before_dev:
+                    logger.info(f"Running tests for {repo_path.name}...")
+                    test_result = await self.test_runner.run_tests(repo_path)
+                    test_passed = test_result.passed
+
+                    if test_result.passed:
+                        logger.info(f"Tests passed: {test_result.get_summary()}")
+                    elif test_result.error:
+                        logger.info(f"Tests skipped: {test_result.error}")
+                    else:
+                        logger.warning(f"Tests failed: {test_result.get_summary()}")
 
                 # Start dev server if configured (Phase 4)
                 dev_server_enabled = self.config.get('dev_servers', {}).get('enabled', True)
@@ -292,7 +308,12 @@ class SyncDaemon:
                 server_started = False
                 server_url = None
 
-                if dev_server_enabled and auto_start:
+                # Check if we should skip dev server based on test results
+                skip_dev_server = False
+                if test_result and not test_result.passed:
+                    skip_dev_server = self.test_runner.should_skip_dev_server(test_result)
+
+                if dev_server_enabled and auto_start and not skip_dev_server:
                     logger.info(f"Starting dev server for {repo_path.name}...")
                     server_started = await self.dev_server_manager.start_server(
                         repo_path,
@@ -309,6 +330,8 @@ class SyncDaemon:
                             logger.info(f"Dev server running at {server_url}")
                     else:
                         logger.warning("Dev server could not be started")
+                elif skip_dev_server:
+                    logger.info("Skipping dev server due to test failures")
 
                 # Send notification
                 notif_data = NotificationBuilder.branch_sync_success(
@@ -320,6 +343,17 @@ class SyncDaemon:
                 )
 
                 await self.notification_queue.add_notification(**notif_data)
+
+                # Send separate test result notification if tests were run
+                if test_result and test_result.command:
+                    test_notif_data = NotificationBuilder.test_result(
+                        branch_name=branch_name,
+                        repo_path=str(repo_path),
+                        passed=test_result.passed,
+                        duration=test_result.duration,
+                        output=test_result.get_short_output() if not test_result.passed else None
+                    )
+                    await self.notification_queue.add_notification(**test_notif_data)
 
             else:
                 logger.error(f"Sync failed: {result.error}")
