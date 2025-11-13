@@ -2,15 +2,22 @@
 
 ## 🔍 Discovery: The `claude --teleport` Command
 
-### What It Does
+### What It Actually Does
 ```bash
-claude --teleport session_011CV4zUPzgSkobBUdcow2EN
+# Example from Windows
+D:\Projects\kliis>claude --teleport session_011CV51ciwJ6GFpnUvWFwEku
 ```
 
-This command allows you to "teleport" your local CLI into an active Claude Code web session. You can then:
-- Continue working on the same task locally
-- Work on the same branch Claude was using
-- Switch between web and CLI seamlessly
+**This command teleports the ENTIRE conversation from Claude Code web to your local terminal.**
+
+When you run teleport:
+1. The full conversation history is copied to your terminal
+2. Claude context and task understanding is preserved
+3. Claude continues working in the same branch locally
+4. You interact with Claude in your terminal instead of the browser
+5. All file changes happen locally (not in cloud VM)
+
+**This is NOT just checking out a branch** - it's bringing the whole Claude session to your local environment!
 
 ### Current Problem
 

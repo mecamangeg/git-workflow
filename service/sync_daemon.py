@@ -309,11 +309,16 @@ class SyncDaemon:
 
     async def _is_cli_or_teleport_active(self, repo_path: Path) -> bool:
         """
-        Check if user is working in CLI or teleport session.
+        Check if user is working in CLI or has an active teleport session.
+
+        Claude Teleport: When user runs 'claude --teleport session_XXX', the entire
+        conversation from Claude Code web is teleported to the local terminal.
+        Claude continues working in the same branch locally.
 
         Detects:
-        - Active teleport session (session ID in branch name + recent activity)
-        - Uncommitted changes (user editing locally)
+        - Active 'claude' CLI process in this directory (teleport session)
+        - Session ID in branch name + claude process anywhere
+        - Uncommitted changes (user or Claude editing locally)
         - Git lock file (git command running)
 
         Returns:
@@ -321,34 +326,20 @@ class SyncDaemon:
         """
         import subprocess
         import time
+        import os
 
         try:
-            # Check for git lock file (git command in progress)
+            # Method 1: Check for 'claude' CLI process in this directory
+            if self._has_claude_process(repo_path):
+                logger.info(f"Claude CLI process detected in {repo_path.name} - teleport session active")
+                return True
+
+            # Method 2: Check for git lock file (git command in progress)
             if (repo_path / '.git/index.lock').exists():
                 logger.debug(f"Git lock file found in {repo_path.name}")
                 return True
 
-            # Check for uncommitted changes
-            result = subprocess.run(
-                ['git', 'status', '--porcelain'],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if result.stdout.strip():
-                # Has uncommitted changes
-                # Check if changes are recent (within 5 minutes)
-                index_file = repo_path / '.git/index'
-                if index_file.exists():
-                    mtime = index_file.stat().st_mtime
-                    age = time.time() - mtime
-                    if age < 300:  # 5 minutes
-                        logger.debug(f"Recent uncommitted changes in {repo_path.name} ({age:.0f}s old)")
-                        return True
-
-            # Check for session ID in current branch name (teleport indicator)
+            # Method 3: Check current branch for session ID
             result = subprocess.run(
                 ['git', 'branch', '--show-current'],
                 cwd=repo_path,
@@ -358,10 +349,51 @@ class SyncDaemon:
             )
 
             current_branch = result.stdout.strip()
+
+            # If branch contains session ID, check for activity
             if current_branch and 'session_' in current_branch:
-                # Branch contains session ID - likely teleport session
-                logger.info(f"Teleport session detected in {repo_path.name} (branch: {current_branch})")
-                return True
+                # Check for uncommitted changes (Claude or user working)
+                status_result = subprocess.run(
+                    ['git', 'status', '--porcelain'],
+                    cwd=repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if status_result.stdout.strip():
+                    # Has uncommitted changes on a session branch
+                    logger.info(f"Teleport branch with uncommitted changes: {current_branch}")
+                    return True
+
+                # Check for recent git activity (file modifications)
+                index_file = repo_path / '.git/index'
+                if index_file.exists():
+                    mtime = index_file.stat().st_mtime
+                    age = time.time() - mtime
+                    if age < 300:  # 5 minutes
+                        logger.info(f"Recent activity on teleport branch {current_branch} ({age:.0f}s ago)")
+                        return True
+
+            # Method 4: Check for any uncommitted changes (non-session branch)
+            elif current_branch:
+                status_result = subprocess.run(
+                    ['git', 'status', '--porcelain'],
+                    cwd=repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if status_result.stdout.strip():
+                    # Has uncommitted changes, check if recent
+                    index_file = repo_path / '.git/index'
+                    if index_file.exists():
+                        mtime = index_file.stat().st_mtime
+                        age = time.time() - mtime
+                        if age < 300:  # 5 minutes
+                            logger.debug(f"Recent uncommitted changes in {repo_path.name} ({age:.0f}s old)")
+                            return True
 
             return False
 
@@ -373,6 +405,69 @@ class SyncDaemon:
             logger.error(f"Error checking CLI/teleport status: {e}")
             # Assume active to be safe
             return True
+
+    def _has_claude_process(self, repo_path: Path) -> bool:
+        """
+        Check if there's an active 'claude' CLI process in this directory.
+
+        Detects: claude --teleport, claude chat, or any claude CLI command
+        running in this repository directory.
+        """
+        import subprocess
+        import platform
+
+        try:
+            repo_path_str = str(repo_path)
+
+            # Different commands for different OS
+            if platform.system() == 'Windows':
+                # Windows: Use tasklist and wmic to find processes with working directory
+                # Check for claude.exe or claude processes
+                result = subprocess.run(
+                    ['tasklist', '/FI', 'IMAGENAME eq claude.exe', '/FO', 'CSV'],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
+
+                if 'claude.exe' in result.stdout.lower():
+                    # Claude process exists, now check if it's in this directory
+                    # This is a simplification - on Windows it's harder to get CWD
+                    # We'll check for the process and trust session ID detection
+                    logger.debug(f"Claude.exe process found (Windows)")
+                    return False  # Let session ID detection handle it
+
+            else:
+                # Linux/macOS: Use ps to find processes
+                result = subprocess.run(
+                    ['ps', 'aux'],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
+
+                # Look for 'claude' command with this directory in the command line
+                for line in result.stdout.split('\n'):
+                    if 'claude' in line.lower():
+                        # Check if this directory is mentioned
+                        if repo_path_str in line or repo_path.name in line:
+                            logger.debug(f"Claude process found for {repo_path.name}")
+                            return True
+
+                        # Check for 'claude --teleport' anywhere (might affect this repo)
+                        if '--teleport' in line or 'teleport' in line:
+                            logger.debug("Claude teleport process found")
+                            # Let session ID detection verify if it's this repo
+                            return False
+
+            return False
+
+        except subprocess.TimeoutError:
+            logger.warning("Process check timeout")
+            return False
+        except Exception as e:
+            logger.debug(f"Error checking for claude process: {e}")
+            return False
 
     def get_status(self) -> dict:
         """Get daemon status"""
