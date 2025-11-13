@@ -1,0 +1,109 @@
+# Git Workflow Guardian - Rules Configuration
+version: 1.0.0
+
+# Workflow rules enforcement
+rules:
+  # CRITICAL: Blocking violations
+  commit_to_main:
+    severity: critical
+    enabled: true
+    blocking: true
+    message: "You're about to commit to main branch"
+    action: "Create a feature branch first"
+    why: "Main should only receive reviewed code via PRs. Direct commits bypass the review process."
+    command: "git checkout -b claude/feature-name-[sessionId]"
+
+  push_to_main:
+    severity: critical
+    enabled: true
+    blocking: true
+    message: "You're about to push to main branch"
+    action: "Create a feature branch and PR instead"
+    why: "Pushing to main bypasses code review and CI checks."
+    command: "git checkout -b claude/feature-name-[sessionId]"
+
+  # WARNING: Strong suggestions
+  branch_naming:
+    severity: warning
+    enabled: true
+    blocking: false
+    pattern: "^claude/[a-z0-9-]+-[A-Za-z0-9]{24}$"
+    message: "Branch name doesn't follow convention"
+    action: "Rename to: claude/feature-name-{sessionId}"
+    why: "Consistent naming helps track features and PRs."
+
+  # SUGGESTION: Helpful reminders
+  pull_before_work:
+    severity: suggestion
+    enabled: true
+    blocking: false
+    message: "Starting new work session"
+    action: "Pull latest main first"
+    why: "Ensures you're working with latest code and prevents merge conflicts."
+    command: "git pull origin main"
+
+  test_locally:
+    severity: suggestion
+    enabled: true
+    blocking: false
+    check_url: "http://localhost:3011"
+    message: "Local dev server not detected"
+    action: "Start dev server: npm run dev -- -p 3011"
+    why: "Testing locally before committing catches bugs early."
+    command: "npm run dev -- -p 3011"
+
+  delete_merged_branch:
+    severity: suggestion
+    enabled: true
+    blocking: false
+    message: "Branch {branch_name} has been merged"
+    action: "Delete the branch to keep repo clean"
+    why: "Stale branches clutter the repository."
+    command: "git branch -d {branch_name}"
+
+# Notification configuration
+notifications:
+  # Critical violations - blocking popup
+  critical:
+    type: popup
+    blocking: true
+    timeout: null  # No auto-dismiss
+
+  # Warnings - non-blocking popup
+  warning:
+    type: popup
+    blocking: false
+    timeout: 30  # Auto-dismiss after 30s
+
+  # Suggestions - toast notification
+  suggestion:
+    type: toast
+    blocking: false
+    timeout: 10  # Auto-dismiss after 10s
+
+# Override configuration
+overrides:
+  mode: session  # Options: session, time-based, permanent
+  session_duration: null  # Until branch changes
+  time_duration: 3600  # 1 hour (for time-based mode)
+  max_overrides_before_disable: 3  # Suggest disabling after N overrides
+
+# Monitoring configuration
+monitoring:
+  poll_interval: 30  # Seconds between checks
+  repos:
+    auto_discover: true
+    search_paths:
+      - "D:/Projects"
+      - "C:/Users/{username}/Projects"
+    manual_repos: []  # Add specific repo paths here
+
+# Compliance scoring (Phase 3)
+scoring:
+  enabled: false  # Enable in Phase 3
+  target_score: 95
+  metrics:
+    - feature_branch_usage
+    - branch_naming_compliance
+    - local_testing_rate
+    - branch_cleanup_speed

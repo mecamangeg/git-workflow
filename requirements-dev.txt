@@ -1,0 +1,19 @@
+# Git Workflow Guardian - Development Dependencies
+-r requirements.txt
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-timeout>=2.1.0
+
+# Code Quality
+flake8>=6.0.0
+black>=23.0.0
+pylint>=2.17.0
+
+# Type Checking
+mypy>=1.4.0
+types-PyYAML
+types-requests
+types-python-dateutil

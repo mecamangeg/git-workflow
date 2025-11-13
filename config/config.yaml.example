@@ -1,0 +1,70 @@
+# Git Workflow Guardian - Example Configuration
+# Copy this file to config.yaml and customize for your environment
+
+version: 1.0.0
+
+# Workflow rules enforcement
+rules:
+  commit_to_main:
+    severity: critical
+    enabled: true
+    blocking: true
+
+  push_to_main:
+    severity: critical
+    enabled: true
+    blocking: true
+
+  branch_naming:
+    severity: warning
+    enabled: true
+    blocking: false
+    pattern: "^claude/[a-z0-9-]+-[A-Za-z0-9]{24}$"
+
+  pull_before_work:
+    severity: suggestion
+    enabled: true
+
+  test_locally:
+    severity: suggestion
+    enabled: true
+    check_url: "http://localhost:3011"
+
+  delete_merged_branch:
+    severity: suggestion
+    enabled: true
+
+# Notification settings
+notifications:
+  critical:
+    type: popup
+    blocking: true
+
+  warning:
+    type: popup
+    blocking: false
+    timeout: 30
+
+  suggestion:
+    type: toast
+    timeout: 10
+
+# Override settings
+overrides:
+  mode: session
+  max_overrides_before_disable: 3
+
+# Monitoring settings
+monitoring:
+  poll_interval: 30
+  repos:
+    auto_discover: true
+    search_paths:
+      - "D:/Projects"
+      - "C:/Users/YourUsername/Projects"
+    manual_repos: []
+
+# Compliance scoring (Phase 3)
+scoring:
+  enabled: false
+  target_score: 95
