@@ -1,0 +1,25 @@
+2.0.0
+
+Claude Code Workflow Automation - Version 2.0.0
+Released: 2025-01-13
+
+Major Features:
+- Latest Mode: Automatic branch switching based on commit timestamps
+- Handles random branch names from Claude Code web
+- Smart branch detection across all Claude branches
+- Auto-stashing for safe branch switches
+- Configurable throttling to prevent branch thrashing
+- Backward compatible with v1 via sticky mode
+
+Breaking Changes:
+- None (backward compatible via sticky mode)
+
+New Configuration Options:
+- branch_tracking_mode: 'latest' | 'sticky'
+- min_branch_switch_interval: <seconds>
+
+Upgrade from v1:
+See AI-UPGRADE-INSTRUCTIONS.md
+
+Full Changelog:
+See CHANGELOG-V2.md

@@ -1,26 +1,52 @@
 # Files to Copy to Your Projects
 
+## Version 2.0.0 - Latest Mode Release
+
 ## Essential Files (Required)
-mini_sync.py
-.sync.yaml.example
+mini_sync.py                     # V2 with Latest Mode
+.sync.yaml.example               # V2 configuration
 sync-control.sh
 
 ## Devcontainer Files (For GitHub Codespaces)
 .devcontainer/devcontainer.json
 .devcontainer/start-sync.sh
 
-## Documentation (Reference)
-AI-SETUP-INSTRUCTIONS.md
-CODESPACES-SETUP.md
-MINI-VERSION-README.md
-MINI-VERSION-SUMMARY.md
-CODESPACES-WORKFLOW-BRAINSTORM.md
+## Version Information
+VERSION                          # Version 2.0.0
+CHANGELOG-V2.md                  # Complete changelog
+
+## Documentation - User Guides
+CODESPACES-SETUP.md              # Complete Codespaces guide
+MINI-VERSION-README.md           # Full documentation
+MINI-VERSION-SUMMARY.md          # Quick reference
+DOWNLOAD-AND-INSTALL.md          # Download/install guide
+
+## Documentation - AI Assistant Guides
+AI-SETUP-INSTRUCTIONS.md         # Setup guide for AI
+AI-UPGRADE-INSTRUCTIONS.md       # Upgrade from v1 to v2
+
+## Documentation - Implementation Details
+IMPLEMENTATION-COMPLETE.md       # Latest Mode implementation
+AUTOMATION-REFACTORING-BRAINSTORM.md  # Design analysis
+REFACTORING-SUMMARY.md           # Design summary
+CODESPACES-WORKFLOW-BRAINSTORM.md     # Workflow design
+
+## Release Information
+V2-RELEASE-SUMMARY.md            # V2 release summary
 
 ## Installation Helper
 install-to-project.sh
-DOWNLOAD-AND-INSTALL.md
+FILES-TO-COPY.txt
 
 ---
 
-Quick Install Command:
+Quick Install Commands:
+
+# New Installation (V2):
 bash install-to-project.sh /path/to/your/project
+
+# Upgrade from V1 to V2:
+See AI-UPGRADE-INSTRUCTIONS.md
+
+# Download V2 Archive:
+claude-workflow-automation-v2.tar.gz (49KB)
