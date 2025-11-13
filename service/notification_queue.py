@@ -321,6 +321,11 @@ class NotificationBuilder:
                 data={'url': browser_url}
             ),
             NotificationAction(
+                label="Open Terminal",
+                action="open_terminal",
+                data={'repo_path': repo_path, 'branch': branch_name}
+            ),
+            NotificationAction(
                 label="Create PR",
                 action="create_pr",
                 data={'branch': branch_name, 'repo_path': repo_path}

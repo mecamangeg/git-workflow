@@ -25,6 +25,8 @@ except ImportError:
     HAS_PYQT5 = False
 
 from .notification_storage import Notification, NotificationAction
+from .terminal_opener import TerminalOpener, TerminalConfig
+from .pr_creator import PRCreator
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +43,24 @@ class NotificationUI:
     - Fallback from PyQt5 to tkinter
     """
 
-    def __init__(self, notification_queue):
+    def __init__(self, notification_queue, config: Optional[dict] = None):
         """
         Initialize notification UI.
 
         Args:
             notification_queue: NotificationQueue instance
+            config: Optional configuration dict
         """
         self.notification_queue = notification_queue
         self.current_window = None
+        self.config = config or {}
+
+        # Initialize terminal opener and PR creator
+        terminal_config = TerminalConfig(
+            preferred_terminal=self.config.get('terminal', {}).get('preferred')
+        )
+        self.terminal_opener = TerminalOpener(terminal_config)
+        self.pr_creator = PRCreator(self.config.get('github', {}))
 
         # Set display callback
         self.notification_queue.set_display_callback(self.show_notification)
@@ -197,30 +208,35 @@ class NotificationUI:
                 url = action.data.get('url', 'http://localhost:3000')
                 webbrowser.open(url)
 
+            elif action.action == 'open_terminal':
+                # Open terminal in project directory
+                repo_path = action.data.get('repo_path')
+                branch = action.data.get('branch', '')
+                if repo_path:
+                    success = self.terminal_opener.open_terminal(
+                        working_dir=Path(repo_path),
+                        title=f"Git Workflow - {branch}" if branch else "Git Workflow"
+                    )
+                    if success:
+                        logger.info(f"Opened terminal in {repo_path}")
+                    else:
+                        logger.error(f"Failed to open terminal in {repo_path}")
+
             elif action.action == 'create_pr':
-                # Open GitHub PR creation page
+                # Create GitHub PR using gh CLI
                 repo_path = action.data.get('repo_path')
                 branch = action.data.get('branch')
                 if repo_path and branch:
-                    # Get remote URL
-                    result = subprocess.run(
-                        ['git', 'config', '--get', 'remote.origin.url'],
-                        cwd=repo_path,
-                        capture_output=True,
-                        text=True
+                    # Use PRCreator for intelligent PR creation
+                    result = self.pr_creator.create_pr(
+                        repo_path=Path(repo_path),
+                        branch_name=branch,
+                        interactive=True  # Open in web browser for user to fill details
                     )
-                    remote_url = result.stdout.strip()
-
-                    # Convert to GitHub URL
-                    if 'github.com' in remote_url:
-                        # Parse repo from URL
-                        # git@github.com:user/repo.git -> https://github.com/user/repo
-                        if remote_url.startswith('git@'):
-                            remote_url = remote_url.replace(':', '/').replace('git@', 'https://')
-                        remote_url = remote_url.replace('.git', '')
-
-                        pr_url = f"{remote_url}/compare/{branch}?expand=1"
-                        webbrowser.open(pr_url)
+                    if result.success:
+                        logger.info(f"PR created/opened: {result.message}")
+                    else:
+                        logger.error(f"PR creation failed: {result.error}")
 
             elif action.action == 'view_diff':
                 repo_path = action.data.get('repo_path')

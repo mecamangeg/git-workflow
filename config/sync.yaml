@@ -154,6 +154,22 @@ sync:
     #   dev_server_type: flask
     #   dev_server_port: 5000
 
+  # Terminal integration (Phase 4.5)
+  terminal:
+    # Preferred terminal emulator (optional, auto-detect if not specified)
+    # Windows: wt (Windows Terminal), powershell, cmd
+    # macOS: Terminal, iterm
+    # Linux: gnome-terminal, konsole, xfce4-terminal, xterm
+    preferred: null                   # Auto-detect
+
+  # GitHub integration (Phase 4.5)
+  github:
+    # PR creation settings
+    pr_auto_title: true               # Auto-generate PR title from branch name
+    pr_auto_body: true                # Auto-generate PR body from commits
+    pr_draft: false                   # Create as draft PR by default
+    pr_interactive: true              # Open browser for user to edit PR details
+
   # Logging
   logging:
     level: INFO                       # DEBUG, INFO, WARNING, ERROR
