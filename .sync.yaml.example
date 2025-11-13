@@ -6,6 +6,15 @@ claude_branch_patterns:
   - '^claude/.*'
   - '^ai/.*'
 
+# Branch Tracking Mode (NEW!)
+# - 'latest': Always switch to branch with newest commit (RECOMMENDED for Claude Code web)
+# - 'sticky': Stay on current branch only (original behavior)
+branch_tracking_mode: 'latest'
+
+# Minimum seconds between branch switches (prevents thrashing)
+# Only applies in 'latest' mode
+min_branch_switch_interval: 30
+
 # Run tests automatically after sync
 run_tests: true
 

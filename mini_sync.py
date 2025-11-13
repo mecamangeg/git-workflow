@@ -6,10 +6,22 @@ A simplified, project-based version of the Git Workflow Guardian.
 Run this in your project directory to automatically sync Claude branches,
 run tests, and start your dev server.
 
+Features:
+- Two tracking modes: 'sticky' (stay on one branch) or 'latest' (follow newest commits)
+- Smart branch detection: finds branch with most recent commit timestamp
+- Handles random branch names from Claude Code web
+- Auto-stashes local changes before switching branches
+- Configurable throttling to prevent branch thrashing
+
 Usage:
     python mini_sync.py              # One-time sync
     python mini_sync.py --watch      # Watch mode (continuous)
     python mini_sync.py --check      # Check current branch only
+    python mini_sync.py --watch --interval 20  # Custom interval (seconds)
+
+Configuration (.sync.yaml):
+    branch_tracking_mode: 'latest'   # or 'sticky'
+    min_branch_switch_interval: 30   # seconds
 """
 
 import argparse
@@ -119,6 +131,147 @@ class MiniSync:
         if code == 0:
             return stdout.strip()
         return None
+
+    def get_branch_commit_hash(self, branch_name: str) -> Optional[str]:
+        """Get commit hash for a branch"""
+        code, stdout, _ = self.run_command(['git', 'rev-parse', f'origin/{branch_name}'])
+        if code == 0:
+            return stdout.strip()
+        return None
+
+    def get_branch_timestamp(self, branch_name: str) -> Optional[int]:
+        """Get commit timestamp for a branch
+
+        Returns:
+            Unix timestamp of the latest commit on the branch, or None if error
+        """
+        code, stdout, _ = self.run_command(['git', 'log', '-1', '--format=%ct', f'origin/{branch_name}'])
+        if code == 0 and stdout.strip():
+            try:
+                return int(stdout.strip())
+            except ValueError:
+                return None
+        return None
+
+    def has_local_changes(self) -> bool:
+        """Check if there are uncommitted local changes"""
+        code, stdout, _ = self.run_command(['git', 'status', '--porcelain'])
+        return code == 0 and bool(stdout.strip())
+
+    def stash_local_changes(self, reason: str = "auto-stash") -> bool:
+        """Stash local changes with a message"""
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        message = f"{reason} at {timestamp}"
+
+        code, _, stderr = self.run_command(['git', 'stash', 'push', '-m', message])
+        if code == 0:
+            log_success(f"Local changes stashed: {message}")
+            log_info("Recover with: git stash pop")
+            return True
+        else:
+            log_error(f"Failed to stash changes: {stderr}")
+            return False
+
+    def find_latest_claude_branch(self) -> tuple[Optional[str], Optional[int]]:
+        """Find Claude branch with the most recent commit
+
+        Returns:
+            (branch_name, commit_timestamp) or (None, None) if no branches found
+        """
+        branches = self.detect_claude_branches()
+        if not branches:
+            return None, None
+
+        # Get timestamp for each branch
+        branch_timestamps = []
+        for branch in branches:
+            timestamp = self.get_branch_timestamp(branch)
+            if timestamp is not None:
+                branch_timestamps.append((branch, timestamp))
+
+        if not branch_timestamps:
+            return None, None
+
+        # Sort by timestamp (newest first)
+        branch_timestamps.sort(key=lambda x: x[1], reverse=True)
+
+        latest_branch, latest_timestamp = branch_timestamps[0]
+        return latest_branch, latest_timestamp
+
+    def should_switch_branch(self, current_branch: str, latest_branch: str,
+                            current_ts: Optional[int], latest_ts: Optional[int]) -> bool:
+        """Determine if should switch to a different branch
+
+        Considers:
+        - If branches are different
+        - Time difference threshold
+        - Configuration settings
+        """
+        if current_branch == latest_branch:
+            return False
+
+        if current_ts is None or latest_ts is None:
+            return True  # Switch if we can't determine timestamps
+
+        # Check minimum interval threshold
+        min_interval = self.config.get('min_branch_switch_interval', 30)
+        time_diff = latest_ts - current_ts
+
+        if time_diff < min_interval:
+            log_info(f"Latest branch is only {time_diff}s newer (< {min_interval}s threshold), not switching")
+            return False
+
+        return True
+
+    def switch_and_sync_branch(self, branch_name: str) -> bool:
+        """Switch to a branch and sync it
+
+        Handles local changes, switching, and pulling.
+        """
+        old_branch = self.get_current_branch()
+
+        # Handle local changes
+        if self.has_local_changes():
+            log_warning("Local changes detected")
+            if not self.stash_local_changes(f"before switch to {branch_name}"):
+                log_error("Cannot switch branches with uncommitted changes")
+                return False
+
+        # Log branch switch
+        log_header(f"Branch Switch: {old_branch} → {branch_name}")
+        log_info(f"Reason: Latest commit found on {branch_name}")
+
+        # Perform sync
+        if self.sync_branch(branch_name):
+            log_success(f"Now on {branch_name} with latest code")
+            return True
+        else:
+            log_error(f"Failed to switch to {branch_name}")
+            return False
+
+    def has_new_commits(self, branch_name: Optional[str] = None) -> bool:
+        """Check if a branch has new commits compared to local
+
+        Args:
+            branch_name: Branch to check, or None for current branch
+        """
+        if branch_name is None:
+            branch_name = self.get_current_branch()
+
+        if not branch_name:
+            return False
+
+        # Get local and remote commit hashes
+        code, local_hash, _ = self.run_command(['git', 'rev-parse', 'HEAD'])
+        if code != 0:
+            return False
+
+        code, remote_hash, _ = self.run_command(['git', 'rev-parse', f'origin/{branch_name}'])
+        if code != 0:
+            return False
+
+        return local_hash.strip() != remote_hash.strip()
 
     def sync_branch(self, branch_name: str) -> bool:
         """Sync a Claude branch"""
@@ -512,6 +665,8 @@ def load_config(project_dir: Path) -> dict:
     # Default config
     return {
         'claude_branch_patterns': ['^claude/.*'],
+        'branch_tracking_mode': 'latest',  # 'sticky' or 'latest'
+        'min_branch_switch_interval': 30,  # Minimum seconds between branch switches
         'run_tests': True,
         'start_dev_server': True,
         'auto_start_server': False,  # Set to True for 100% automation in Codespaces
@@ -553,25 +708,69 @@ def main():
 
     if args.watch:
         # Watch mode
+        mode = config.get('branch_tracking_mode', 'sticky')
         log_info(f"Watch mode enabled (checking every {args.interval}s)")
+        log_info(f"Branch tracking mode: {mode}")
         log_info("Press Ctrl+C to stop")
 
         try:
             while True:
-                branches = sync.detect_claude_branches()
-                if branches:
-                    latest = branches[-1]  # Get most recent
-                    current = sync.get_current_branch()
+                try:
+                    if mode == 'latest':
+                        # Latest mode: Find and switch to branch with newest commit
+                        latest_branch, latest_ts = sync.find_latest_claude_branch()
 
-                    if current != latest:
-                        log_info(f"New Claude branch detected: {latest}")
-                        if sync.sync_branch(latest):
-                            if sync.run_tests():
-                                sync.start_dev_server()
+                        if latest_branch:
+                            current_branch = sync.get_current_branch()
+                            current_ts = sync.get_branch_timestamp(current_branch) if current_branch else None
+
+                            # Determine if should switch branches
+                            if sync.should_switch_branch(current_branch, latest_branch, current_ts, latest_ts):
+                                log_info(f"Switching to latest branch: {latest_branch}")
+                                if sync.switch_and_sync_branch(latest_branch):
+                                    # Run tests and start server after switch
+                                    if sync.run_tests():
+                                        sync.start_dev_server()
+                            elif sync.has_new_commits(current_branch):
+                                # Current branch has new commits, just pull
+                                log_info(f"New commits on current branch: {current_branch}")
+                                if sync.sync_branch(current_branch):
+                                    if sync.run_tests():
+                                        sync.start_dev_server()
+                        else:
+                            log_info("No Claude branches found")
+
+                    else:
+                        # Sticky mode: Original behavior - stay on current branch
+                        current_branch = sync.get_current_branch()
+
+                        if current_branch:
+                            # Check if current branch is a Claude branch
+                            if any(current_branch.startswith(pattern.replace('^', '').replace('.*', ''))
+                                  for pattern in sync.claude_patterns):
+                                # On a Claude branch, check for updates
+                                if sync.has_new_commits(current_branch):
+                                    log_info(f"New commits detected on {current_branch}")
+                                    if sync.sync_branch(current_branch):
+                                        if sync.run_tests():
+                                            sync.start_dev_server()
+                            else:
+                                # Not on a Claude branch, try to find one
+                                branches = sync.detect_claude_branches()
+                                if branches:
+                                    latest = branches[-1]
+                                    log_info(f"Claude branch detected: {latest}")
+                                    if sync.sync_branch(latest):
+                                        if sync.run_tests():
+                                            sync.start_dev_server()
+
+                except Exception as e:
+                    log_error(f"Error in watch loop: {e}")
 
                 time.sleep(args.interval)
         except KeyboardInterrupt:
             log_info("\nStopping watch mode")
+            sync.stop_dev_server()
             sys.exit(0)
     else:
         # One-time sync
