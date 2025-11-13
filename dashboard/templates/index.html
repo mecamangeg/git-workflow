@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Workflow Guardian - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ Git Workflow Guardian</h1>
+            <p class="subtitle">Compliance Dashboard</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Compliance Score</h3>
+                <div class="score" id="complianceScore">--</div>
+                <p class="stat-label">Target: 95%</p>
+            </div>
+
+            <div class="stat-card">
+                <h3>Total Violations</h3>
+                <div class="number" id="totalViolations">--</div>
+                <p class="stat-label">All time</p>
+            </div>
+
+            <div class="stat-card critical">
+                <h3>Critical</h3>
+                <div class="number" id="criticalCount">--</div>
+                <p class="stat-label">Blocked operations</p>
+            </div>
+
+            <div class="stat-card warning">
+                <h3>Warnings</h3>
+                <div class="number" id="warningCount">--</div>
+                <p class="stat-label">Strong suggestions</p>
+            </div>
+
+            <div class="stat-card suggestion">
+                <h3>Suggestions</h3>
+                <div class="number" id="suggestionCount">--</div>
+                <p class="stat-label">Helpful reminders</p>
+            </div>
+
+            <div class="stat-card">
+                <h3>Overrides</h3>
+                <div class="number" id="overrideCount">--</div>
+                <p class="stat-label">User bypassed</p>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="section">
+                <h2>📊 Violation Trends (30 Days)</h2>
+                <canvas id="trendsChart"></canvas>
+            </div>
+
+            <div class="section">
+                <h2>📈 Violations by Rule</h2>
+                <canvas id="rulesChart"></canvas>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔴 Live Feed</h2>
+            <div class="live-feed" id="liveFeed">
+                <p class="loading">Loading violations...</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📁 Monitored Repositories</h2>
+            <div id="repositoriesList">
+                <p class="loading">Loading repositories...</p>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button onclick="exportCSV()" class="btn-primary">📥 Export to CSV</button>
+            <button onclick="refreshData()" class="btn-secondary">🔄 Refresh</button>
+        </div>
+
+        <footer>
+            <p>Git Workflow Guardian v1.0.0 | <a href="https://github.com/yourusername/git-workflow-guardian">GitHub</a></p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
