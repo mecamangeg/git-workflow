@@ -1,0 +1,36 @@
+# Mini Git Workflow - Project Configuration
+# Place this file as .sync.yaml in your project root
+
+# Claude branch patterns to detect
+claude_branch_patterns:
+  - '^claude/.*'
+  - '^ai/.*'
+
+# Run tests automatically after sync
+run_tests: true
+
+# Test timeout in seconds
+test_timeout: 300
+
+# Start dev server after tests pass
+start_dev_server: true
+
+# Custom test commands (optional - auto-detected if not specified)
+test_commands:
+  node: "npm test"
+  next: "npm test"
+  react: "npm test"
+  vue: "npm test"
+  python: "pytest"
+  django: "python manage.py test"
+  flask: "pytest"
+
+# Custom dev server commands (optional - auto-detected if not specified)
+dev_commands:
+  node: "npm run dev"
+  next: "npm run dev"
+  react: "npm start"
+  vue: "npm run serve"
+  python: "python manage.py runserver"
+  django: "python manage.py runserver"
+  flask: "flask run"
